@@ -35,8 +35,8 @@ jobs:
       - name: Create Release Pull Request or Publish
         uses: changesets/action@v1
         with:
-          publish: pnpm release
-          version: pnpm version
+          publish: pnpm run release
+          version: pnpm run version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # npm CLI ≥ 11.5 + OIDC trusted publisher → no NPM_TOKEN needed.
