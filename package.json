@@ -1,6 +1,6 @@
 {
   "name": "chat-state-convex-adapter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Convex state adapter for chat-sdk — ships as a Convex Component",
   "type": "module",
   "main": "./dist/client/index.js",
