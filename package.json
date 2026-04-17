@@ -63,11 +63,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/avr00/chat-state-convex.git"
+    "url": "git+https://github.com/avr00/chat-state-convex-adapter.git"
   },
-  "homepage": "https://github.com/avr00/chat-state-convex#readme",
+  "homepage": "https://github.com/avr00/chat-state-convex-adapter#readme",
   "bugs": {
-    "url": "https://github.com/avr00/chat-state-convex/issues"
+    "url": "https://github.com/avr00/chat-state-convex-adapter/issues"
   },
   "publishConfig": {
     "access": "public"
