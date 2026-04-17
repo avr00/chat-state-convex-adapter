@@ -1,0 +1,161 @@
+// Copy this file to `convex/chatState.ts` in your app, then pass
+// `api.chatState` to `createConvexState({ api: api.chatState, ... })`.
+//
+// These are thin wrapper mutations/queries. They forward calls from a
+// ConvexHttpClient (used by the Chat SDK webhook handler) into the
+// chat-state-convex-adapter component.
+
+import { v } from "convex/values";
+import { components } from "./_generated/api";
+import { mutation, query } from "./_generated/server";
+
+export const subscribe = mutation({
+  args: { keyPrefix: v.string(), threadId: v.string() },
+  returns: v.null(),
+  handler: (ctx, args) =>
+    ctx.runMutation(components.chatState.subscriptions.subscribe, args),
+});
+
+export const unsubscribe = mutation({
+  args: { keyPrefix: v.string(), threadId: v.string() },
+  returns: v.null(),
+  handler: (ctx, args) =>
+    ctx.runMutation(components.chatState.subscriptions.unsubscribe, args),
+});
+
+export const isSubscribed = query({
+  args: { keyPrefix: v.string(), threadId: v.string() },
+  returns: v.boolean(),
+  handler: (ctx, args) =>
+    ctx.runQuery(components.chatState.subscriptions.isSubscribed, args),
+});
+
+export const acquireLock = mutation({
+  args: {
+    keyPrefix: v.string(),
+    threadId: v.string(),
+    ttlMs: v.number(),
+    token: v.string(),
+  },
+  returns: v.union(
+    v.object({
+      threadId: v.string(),
+      token: v.string(),
+      expiresAt: v.number(),
+    }),
+    v.null()
+  ),
+  handler: (ctx, args) =>
+    ctx.runMutation(components.chatState.locks.acquireLock, args),
+});
+
+export const releaseLock = mutation({
+  args: { keyPrefix: v.string(), threadId: v.string(), token: v.string() },
+  returns: v.null(),
+  handler: (ctx, args) =>
+    ctx.runMutation(components.chatState.locks.releaseLock, args),
+});
+
+export const forceReleaseLock = mutation({
+  args: { keyPrefix: v.string(), threadId: v.string() },
+  returns: v.null(),
+  handler: (ctx, args) =>
+    ctx.runMutation(components.chatState.locks.forceReleaseLock, args),
+});
+
+export const extendLock = mutation({
+  args: {
+    keyPrefix: v.string(),
+    threadId: v.string(),
+    token: v.string(),
+    ttlMs: v.number(),
+  },
+  returns: v.boolean(),
+  handler: (ctx, args) =>
+    ctx.runMutation(components.chatState.locks.extendLock, args),
+});
+
+export const kvGet = query({
+  args: { keyPrefix: v.string(), cacheKey: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: (ctx, args) => ctx.runQuery(components.chatState.kv.get, args),
+});
+
+export const kvSet = mutation({
+  args: {
+    keyPrefix: v.string(),
+    cacheKey: v.string(),
+    value: v.string(),
+    ttlMs: v.optional(v.number()),
+  },
+  returns: v.null(),
+  handler: (ctx, args) => ctx.runMutation(components.chatState.kv.set, args),
+});
+
+export const kvSetIfNotExists = mutation({
+  args: {
+    keyPrefix: v.string(),
+    cacheKey: v.string(),
+    value: v.string(),
+    ttlMs: v.optional(v.number()),
+  },
+  returns: v.boolean(),
+  handler: (ctx, args) =>
+    ctx.runMutation(components.chatState.kv.setIfNotExists, args),
+});
+
+export const kvDelete = mutation({
+  args: { keyPrefix: v.string(), cacheKey: v.string() },
+  returns: v.null(),
+  handler: (ctx, args) => ctx.runMutation(components.chatState.kv.del, args),
+});
+
+export const appendToList = mutation({
+  args: {
+    keyPrefix: v.string(),
+    listKey: v.string(),
+    value: v.string(),
+    maxLength: v.optional(v.number()),
+    ttlMs: v.optional(v.number()),
+  },
+  returns: v.null(),
+  handler: (ctx, args) =>
+    ctx.runMutation(components.chatState.lists.appendToList, args),
+});
+
+export const getList = query({
+  args: { keyPrefix: v.string(), listKey: v.string() },
+  returns: v.array(v.string()),
+  handler: (ctx, args) =>
+    ctx.runQuery(components.chatState.lists.getList, args),
+});
+
+export const enqueue = mutation({
+  args: {
+    keyPrefix: v.string(),
+    threadId: v.string(),
+    value: v.string(),
+    expiresAt: v.number(),
+    maxSize: v.number(),
+  },
+  returns: v.number(),
+  handler: (ctx, args) =>
+    ctx.runMutation(components.chatState.queues.enqueue, args),
+});
+
+export const dequeue = mutation({
+  args: { keyPrefix: v.string(), threadId: v.string() },
+  returns: v.union(
+    v.object({ value: v.string(), expiresAt: v.number() }),
+    v.null()
+  ),
+  handler: (ctx, args) =>
+    ctx.runMutation(components.chatState.queues.dequeue, args),
+});
+
+export const queueDepth = query({
+  args: { keyPrefix: v.string(), threadId: v.string() },
+  returns: v.number(),
+  handler: (ctx, args) =>
+    ctx.runQuery(components.chatState.queues.queueDepth, args),
+});

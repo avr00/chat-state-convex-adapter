@@ -1,0 +1,22 @@
+node_modules
+dist
+coverage
+.turbo
+.DS_Store
+*.log
+.env
+.env.local
+.convex
+
+# Convex-CLI-installed agent tooling — not part of this package
+.agents/
+AGENTS.md
+CLAUDE.md
+skills-lock.json
+# Agent guidelines convex generates inside _generated/ (noise)
+**/_generated/ai/
+
+# _generated/ directories are committed (both src/component/_generated
+# and example/convex/_generated), following the rate-limiter pattern,
+# so CI and downstream consumers don't need Convex auth to build.
+.claude/
