@@ -22,7 +22,8 @@
     },
     "./_generated/component.js": {
       "types": "./dist/component/_generated/component.d.ts"
-    }
+    },
+    "./test": "./src/test.ts"
   },
   "files": [
     "dist",
