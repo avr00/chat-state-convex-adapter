@@ -14,6 +14,12 @@ Stores subscriptions, distributed locks, dedupe (via `setIfNotExists`), lists, a
 
 ```bash
 npm install chat-state-convex-adapter
+# or
+pnpm add chat-state-convex-adapter
+# or
+yarn add chat-state-convex-adapter
+# or
+bun add chat-state-convex-adapter
 ```
 
 ## Set up the component
