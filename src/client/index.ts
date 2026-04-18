@@ -302,3 +302,25 @@ export function createConvexState(
 ): ConvexStateAdapter {
   return new ConvexStateAdapter(options);
 }
+
+/**
+ * Convenient alias for consumers who want a named type for an adapter
+ * instance without importing the implementation class.
+ *
+ * ```ts
+ * import type { ChatStateAdapter } from "chat-state-convex-adapter";
+ * let state: ChatStateAdapter;
+ * ```
+ */
+export type ChatStateAdapter = ConvexStateAdapter;
+
+// Re-export the ctx-based adapter for consumers whose Chat SDK webhook
+// handler runs inside a Convex httpAction/action (no HTTP round-trip needed).
+export {
+  ConvexCtxStateAdapter,
+  createConvexStateFromCtx,
+} from "./ctx.js";
+export type {
+  ConvexCtxStateAdapterOptions,
+  RunComponentCtx,
+} from "./ctx.js";

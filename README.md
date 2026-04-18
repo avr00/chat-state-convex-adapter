@@ -35,15 +35,68 @@ app.use(chatState);
 export default app;
 ```
 
-## Add the wrapper functions
+## Pick your usage pattern
 
-Chat SDK calls the state adapter from outside Convex (e.g. a Next.js webhook route). Convex component public functions aren't reachable from external HTTP clients, so you export thin wrappers from your own `convex/` directory.
+**A. Inside a Convex `httpAction` / `action` (recommended if your stack is Convex-native).** No wrapper file needed — the adapter uses `ctx.runMutation` directly. Skip to [Option A](#option-a-inside-a-convex-action).
 
-Copy [`convex-chatState.ts.template`](./src/templates/convex-chatState.ts.template) into `convex/chatState.ts` in your app. It's 17 trivial forwarders to `components.chatState.*`.
+**B. From an external runtime (Next.js route, Cloudflare Worker, etc.) via `ConvexHttpClient`.** Requires a one-file wrapper in your `convex/` dir. See [Option B](#option-b-from-an-external-runtime).
 
-## Wire the adapter
+### Option A — inside a Convex action
 
 ```ts
+// convex/webhook.ts
+import { httpAction } from "./_generated/server";
+import { components } from "./_generated/api";
+import { Chat } from "chat";
+import { createSlackAdapter } from "@chat-adapter/slack";
+import { createConvexStateFromCtx } from "chat-state-convex-adapter";
+
+export const slackWebhook = httpAction(async (ctx, request) => {
+  const state = createConvexStateFromCtx({
+    ctx,
+    component: components.chatState,
+  });
+  await state.connect();
+
+  const bot = new Chat({
+    userName: "mybot",
+    adapters: { slack: createSlackAdapter() },
+    state,
+  });
+
+  return bot.webhooks.slack(request);
+});
+```
+
+No wrapper file, no HTTP client. `ctx.runMutation` talks to the component natively.
+
+### Option B — from an external runtime
+
+Add the wrapper functions to your own `convex/` dir (Convex components don't expose public functions to external clients, so the app must forward them). One helper call instead of 150 lines:
+
+```ts
+// convex/chatState.ts
+import { mutation, query } from "./_generated/server";
+import { components } from "./_generated/api";
+import { createChatStateWrappers } from "chat-state-convex-adapter/wrappers";
+
+export const {
+  subscribe, unsubscribe, isSubscribed,
+  acquireLock, releaseLock, forceReleaseLock, extendLock,
+  kvGet, kvSet, kvSetIfNotExists, kvDelete,
+  appendToList, getList,
+  enqueue, dequeue, queueDepth,
+} = createChatStateWrappers({
+  mutation,
+  query,
+  component: components.chatState,
+});
+```
+
+Then wire the adapter with a `ConvexHttpClient`:
+
+```ts
+// your webhook route (Next.js, etc.)
 import { ConvexHttpClient } from "convex/browser";
 import { Chat } from "chat";
 import { createSlackAdapter } from "@chat-adapter/slack";
@@ -52,8 +105,6 @@ import { api } from "./convex/_generated/api";
 
 const client = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-// Construct the adapter, call connect() before Chat touches it.
-// Chat keeps the adapter private, so hold onto `state` yourself.
 const state = createConvexState({ client, api: api.chatState });
 await state.connect();
 
@@ -66,12 +117,41 @@ const bot = new Chat({
 
 ## Options
 
+### `createConvexState` (external HTTP client)
+
 | Option | Required | Default | Description |
 |---|---|---|---|
-| `client` | yes | — | A `ConvexHttpClient` or `ConvexClient` pointed at your deployment |
-| `api` | yes | — | Your wrapper API from `api.chatState` (see above) |
-| `keyPrefix` | no | `"chat-sdk"` | Namespace for all rows, in case you run multiple bots on one deployment |
+| `client` | yes | — | `ConvexHttpClient` or `ConvexClient` pointed at your deployment |
+| `api` | yes | — | Your wrapper API, typically `api.chatState` |
+| `keyPrefix` | no | `"chat-sdk"` | See [Multi-tenant usage](#multi-tenant-usage) |
 | `logger` | no | `ConsoleLogger("info").child("convex")` | Any Chat SDK `Logger` |
+
+### `createConvexStateFromCtx` (inside Convex)
+
+| Option | Required | Default | Description |
+|---|---|---|---|
+| `ctx` | yes | — | Action/mutation ctx (must support `runMutation`/`runQuery`) |
+| `component` | yes | — | Component reference, typically `components.chatState` |
+| `keyPrefix` | no | `"chat-sdk"` | See [Multi-tenant usage](#multi-tenant-usage) |
+| `logger` | no | `ConsoleLogger("info").child("convex-ctx")` | Any Chat SDK `Logger` |
+
+## Multi-tenant usage
+
+`keyPrefix` is a **load-bearing isolation primitive**, not a cosmetic namespace. Every row written by the adapter is scoped to it, so choosing the right value is how you run more than one bot on a single Convex deployment without them stepping on each other's subscriptions, locks, and queues.
+
+A useful convention: `${tenantId}:${workspaceId}:${platform}`.
+
+```ts
+const state = createConvexStateFromCtx({
+  ctx,
+  component: components.chatState,
+  keyPrefix: `${tenantId}:${workspaceId}:slack`,
+});
+```
+
+Why not just `workspaceId`? A single workspace can host multiple bots (one for Slack, one for Discord, one dev, one prod) and they must not share lock or dedupe keys. Include every dimension that can produce an independent bot instance.
+
+Because `keyPrefix` gates every read and write, **misconfiguring it is silently destructive** — two deployments with the same prefix will see each other's state. Treat it like a schema name, not a log tag.
 
 ## What it stores
 
