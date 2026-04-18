@@ -2,6 +2,7 @@ import type { Lock, Logger, QueueEntry, StateAdapter } from "chat";
 import { ConsoleLogger } from "chat";
 import type { ConvexClient, ConvexHttpClient } from "convex/browser";
 import type { FunctionReference } from "convex/server";
+import type { ConvexCtxStateAdapter } from "./ctx.js";
 
 /**
  * Supported Convex clients. Both ship with `.mutation(ref, args, opts?)` and
@@ -303,17 +304,6 @@ export function createConvexState(
   return new ConvexStateAdapter(options);
 }
 
-/**
- * Convenient alias for consumers who want a named type for an adapter
- * instance without importing the implementation class.
- *
- * ```ts
- * import type { ChatStateAdapter } from "chat-state-convex-adapter";
- * let state: ChatStateAdapter;
- * ```
- */
-export type ChatStateAdapter = ConvexStateAdapter;
-
 // Re-export the ctx-based adapter for consumers whose Chat SDK webhook
 // handler runs inside a Convex httpAction/action (no HTTP round-trip needed).
 export {
@@ -324,3 +314,19 @@ export type {
   ConvexCtxStateAdapterOptions,
   RunComponentCtx,
 } from "./ctx.js";
+
+/**
+ * Named type covering both adapter variants. Use this when you want one
+ * import that works regardless of which factory produced the instance —
+ * `createConvexState` (external HTTP client) or `createConvexStateFromCtx`
+ * (inside a Convex action).
+ *
+ * ```ts
+ * import type { ChatStateAdapter } from "chat-state-convex-adapter";
+ *
+ * interface CreateBotResult {
+ *   state: ChatStateAdapter;
+ * }
+ * ```
+ */
+export type ChatStateAdapter = ConvexCtxStateAdapter | ConvexStateAdapter;
