@@ -52,13 +52,16 @@ import { api } from "./convex/_generated/api";
 
 const client = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
+// Construct the adapter, call connect() before Chat touches it.
+// Chat keeps the adapter private, so hold onto `state` yourself.
+const state = createConvexState({ client, api: api.chatState });
+await state.connect();
+
 const bot = new Chat({
   userName: "mybot",
   adapters: { slack: createSlackAdapter() },
-  state: createConvexState({ client, api: api.chatState }),
+  state,
 });
-
-await bot.state.connect();
 ```
 
 ## Options

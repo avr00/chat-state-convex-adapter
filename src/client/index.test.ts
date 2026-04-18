@@ -1,6 +1,10 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import type { FunctionReference } from "convex/server";
+import type {
+  FunctionArgs,
+  FunctionReference,
+  FunctionReturnType,
+} from "convex/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api as componentApi } from "../component/_generated/api.js";
 import schema from "../component/schema.js";
@@ -53,18 +57,28 @@ function buildHarness() {
       .queueDepth as unknown as ChatStateApi["queueDepth"],
   };
 
-  const client: ConvexClientLike = {
-    mutation: (ref, args) =>
+  // Mocking the full ConvexHttpClient / ConvexClient class surface is
+  // unreasonable in unit tests, so we expose just the two methods the adapter
+  // needs and cast. The production type of `ConvexClientLike` remains strict
+  // (ConvexClient | ConvexHttpClient) so users get full type-checking.
+  const client = {
+    mutation: <M extends FunctionReference<"mutation">>(
+      ref: M,
+      args: FunctionArgs<M>
+    ) =>
       t.mutation(
-        ref as unknown as FunctionReference<"mutation">,
+        ref as FunctionReference<"mutation">,
         args as Record<string, unknown>
-      ) as Promise<never>,
-    query: (ref, args) =>
+      ) as Promise<FunctionReturnType<M>>,
+    query: <Q extends FunctionReference<"query">>(
+      ref: Q,
+      args: FunctionArgs<Q>
+    ) =>
       t.query(
-        ref as unknown as FunctionReference<"query">,
+        ref as FunctionReference<"query">,
         args as Record<string, unknown>
-      ) as Promise<never>,
-  };
+      ) as Promise<FunctionReturnType<Q>>,
+  } as unknown as ConvexClientLike;
 
   return { t, api, client };
 }

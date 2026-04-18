@@ -1,21 +1,15 @@
 import type { Lock, Logger, QueueEntry, StateAdapter } from "chat";
 import { ConsoleLogger } from "chat";
+import type { ConvexClient, ConvexHttpClient } from "convex/browser";
 import type { FunctionReference } from "convex/server";
 
 /**
- * Minimal subset of Convex client methods we need. Both `ConvexHttpClient`
- * and `ConvexClient` satisfy this, so either works.
+ * Supported Convex clients. Both ship with `.mutation(ref, args, opts?)` and
+ * `.query(ref, args)` signatures that the adapter relies on. The union is
+ * strict — we don't accept just any shape-compatible object, so breaking
+ * changes in Convex's client API surface here at compile time.
  */
-export interface ConvexClientLike {
-  mutation<Args extends Record<string, unknown>, Ret>(
-    functionReference: FunctionReference<"mutation", "public", Args, Ret>,
-    args: Args
-  ): Promise<Ret>;
-  query<Args extends Record<string, unknown>, Ret>(
-    functionReference: FunctionReference<"query", "public", Args, Ret>,
-    args: Args
-  ): Promise<Ret>;
-}
+export type ConvexClientLike = ConvexClient | ConvexHttpClient;
 
 type Ref<
   Kind extends "mutation" | "query",
