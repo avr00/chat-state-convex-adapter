@@ -18,6 +18,7 @@
   - `appendToList` reads the list once per call instead of three times.
   - Dev tooling: `chat` 4.41, `convex` 1.46, `convex-test` 0.0.60, `vitest` 5, TypeScript 6.0. `_generated/` is regenerated with Convex 1.46.
   - README: documents the supported SDK features, the TTL semantics, the cleanup behavior, and that `Chat` calls `state.connect()` itself.
+  - Aligned with the Chat SDK adapter guide ([building](https://chat-sdk.dev/docs/contributing/building), publishing, documenting). Both adapters now throw a clear error at construction when a required option (`client`/`api` or `ctx`/`component`) is missing, like the official state adapters, instead of failing with a `TypeError` on the first webhook. The factories have TSDoc. The npm tarball no longer ships test files; `src/` is still included for the `./test` export. The README gains npm badges, a peer-dependency install line, and an environment-variables section.
 
 ### Patch Changes
 

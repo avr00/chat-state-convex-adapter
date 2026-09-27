@@ -84,6 +84,16 @@ function buildHarness() {
 }
 
 describe("ConvexStateAdapter", () => {
+  test("rejects missing required options at construction", () => {
+    const { api, client } = buildHarness();
+    expect(() =>
+      createConvexState({ client: undefined as never, api })
+    ).toThrow(/`client` is required/);
+    expect(() =>
+      createConvexState({ client, api: undefined as never })
+    ).toThrow(/`api` is required/);
+  });
+
   describe("connect/disconnect lifecycle", () => {
     test("throws if used before connect", async () => {
       const { api, client } = buildHarness();

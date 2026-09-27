@@ -98,6 +98,11 @@ function generateToken(): string {
   return `cvx_${crypto.randomUUID()}`;
 }
 
+/**
+ * Chat SDK state adapter for runtimes outside Convex (Next.js routes, Workers,
+ * etc.). Calls your app's wrapper functions through a Convex client. Inside a
+ * Convex action, use `ConvexCtxStateAdapter` instead.
+ */
 export class ConvexStateAdapter implements StateAdapter {
   private readonly client: ConvexClientLike;
   private readonly api: ChatStateApi;
@@ -106,6 +111,18 @@ export class ConvexStateAdapter implements StateAdapter {
   private connected = false;
 
   constructor(options: ConvexStateAdapterOptions) {
+    // Fail at construction, like the official state adapters, rather than
+    // with a TypeError on the first webhook.
+    if (!options?.client) {
+      throw new Error(
+        "ConvexStateAdapter: `client` is required (a ConvexHttpClient or ConvexClient)."
+      );
+    }
+    if (!options.api) {
+      throw new Error(
+        "ConvexStateAdapter: `api` is required (typically `api.chatState`, your wrapper functions)."
+      );
+    }
     this.client = options.client;
     this.api = options.api;
     this.keyPrefix = options.keyPrefix ?? "chat-sdk";
@@ -298,6 +315,14 @@ export class ConvexStateAdapter implements StateAdapter {
   }
 }
 
+/**
+ * Create a state adapter for a Chat SDK bot running outside Convex.
+ *
+ * ```ts
+ * const state = createConvexState({ client, api: api.chatState });
+ * const bot = new Chat({ userName: "mybot", adapters, state });
+ * ```
+ */
 export function createConvexState(
   options: ConvexStateAdapterOptions
 ): ConvexStateAdapter {

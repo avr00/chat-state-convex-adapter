@@ -33,6 +33,16 @@ function buildHarness() {
 }
 
 describe("ConvexCtxStateAdapter", () => {
+  test("rejects missing required options at construction", () => {
+    const { ctx, component } = buildHarness();
+    expect(() =>
+      createConvexStateFromCtx({ ctx: undefined as never, component })
+    ).toThrow(/`ctx` is required/);
+    expect(() =>
+      createConvexStateFromCtx({ ctx, component: undefined as never })
+    ).toThrow(/`component` is required/);
+  });
+
   test("throws if used before connect", async () => {
     const { ctx, component } = buildHarness();
     const adapter = createConvexStateFromCtx({ ctx, component });

@@ -1,5 +1,8 @@
 # chat-state-convex-adapter
 
+[![npm version](https://img.shields.io/npm/v/chat-state-convex-adapter)](https://www.npmjs.com/package/chat-state-convex-adapter)
+[![npm downloads](https://img.shields.io/npm/dm/chat-state-convex-adapter)](https://www.npmjs.com/package/chat-state-convex-adapter)
+
 Convex state adapter for [chat-sdk](https://chat-sdk.dev), shipped as a [Convex Component](https://convex.dev/components).
 
 Stores subscriptions, distributed locks, dedupe (via `setIfNotExists`), lists, and queues in your Convex deployment — so Chat SDK's webhook handlers can run on any serverless platform and share state safely.
@@ -17,14 +20,16 @@ It implements the full Chat SDK `StateAdapter` contract, so the SDK features bui
 ## Install
 
 ```bash
-npm install chat-state-convex-adapter
+npm install chat convex chat-state-convex-adapter
 # or
-pnpm add chat-state-convex-adapter
+pnpm add chat convex chat-state-convex-adapter
 # or
-yarn add chat-state-convex-adapter
+yarn add chat convex chat-state-convex-adapter
 # or
-bun add chat-state-convex-adapter
+bun add chat convex chat-state-convex-adapter
 ```
+
+`chat` and `convex` are peer dependencies, so your app provides them.
 
 ## Set up the component
 
@@ -140,6 +145,10 @@ const bot = new Chat({
 | `logger` | no | `ConsoleLogger("info").child("convex-ctx")` | Any Chat SDK `Logger` |
 
 `Chat` calls `state.connect()` when it initializes, so you only need to call it yourself if you use the adapter directly before the bot handles its first webhook.
+
+## Environment variables
+
+The adapter reads none. Pass the Convex client (Option B) or the action `ctx` (Option A) explicitly. The only URL involved is the one you give `ConvexHttpClient`, typically your deployment URL (e.g. `NEXT_PUBLIC_CONVEX_URL`).
 
 ## Multi-tenant usage
 

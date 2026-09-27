@@ -60,6 +60,18 @@ export class ConvexCtxStateAdapter implements StateAdapter {
   private connected = false;
 
   constructor(options: ConvexCtxStateAdapterOptions) {
+    // Fail at construction, like the official state adapters, rather than
+    // with a TypeError on the first webhook.
+    if (!options?.ctx) {
+      throw new Error(
+        "ConvexCtxStateAdapter: `ctx` is required (an action or mutation ctx)."
+      );
+    }
+    if (!options.component) {
+      throw new Error(
+        "ConvexCtxStateAdapter: `component` is required (typically `components.chatState`)."
+      );
+    }
     this.ctx = options.ctx;
     this.component = options.component;
     this.keyPrefix = options.keyPrefix ?? "chat-sdk";
@@ -252,6 +264,15 @@ export class ConvexCtxStateAdapter implements StateAdapter {
   }
 }
 
+/**
+ * Create a state adapter for a Chat SDK bot running inside a Convex action or
+ * httpAction. No wrapper file needed.
+ *
+ * ```ts
+ * const state = createConvexStateFromCtx({ ctx, component: components.chatState });
+ * const bot = new Chat({ userName: "mybot", adapters, state });
+ * ```
+ */
 export function createConvexStateFromCtx(
   options: ConvexCtxStateAdapterOptions
 ): ConvexCtxStateAdapter {
