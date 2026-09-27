@@ -164,6 +164,38 @@ describe("locks", () => {
     expect(ok).toBe(false);
   });
 
+  // Chat SDK 4.41 renews held locks with a heartbeat. extendLock must never
+  // hand a lapsed lock back to its old holder once someone else took it.
+  test("extendLock does not resurrect a lock taken over by another holder", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(api.locks.acquireLock, {
+      keyPrefix: KP,
+      threadId: "t1",
+      ttlMs: 10,
+      token: "tok-a",
+    });
+    vi.advanceTimersByTime(50);
+    const taken = await t.mutation(api.locks.acquireLock, {
+      keyPrefix: KP,
+      threadId: "t1",
+      ttlMs: 5000,
+      token: "tok-b",
+    });
+    expect(taken?.token).toBe("tok-b");
+
+    const ok = await t.mutation(api.locks.extendLock, {
+      keyPrefix: KP,
+      threadId: "t1",
+      token: "tok-a",
+      ttlMs: 60_000,
+    });
+    expect(ok).toBe(false);
+
+    const row = await t.run(async (ctx) => ctx.db.query("locks").unique());
+    expect(row?.token).toBe("tok-b");
+    expect(row?.expiresAt).toBe(taken?.expiresAt);
+  });
+
   test("forceReleaseLock bypasses token", async () => {
     const t = convexTest(schema, modules);
     await t.mutation(api.locks.acquireLock, {

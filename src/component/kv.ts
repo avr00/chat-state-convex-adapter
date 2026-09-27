@@ -1,5 +1,9 @@
+// TTL'd key-value storage backing the Chat SDK's get/set/setIfNotExists/delete
+// (thread state, dedupe keys, modal context, adapter caches).
+
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
+import { expiresAtFromTtl, isExpired } from "./expiry.js";
 
 export const get = query({
   args: {
@@ -16,7 +20,7 @@ export const get = query({
       .unique();
 
     if (!row) return null;
-    if (row.expiresAt !== undefined && row.expiresAt <= Date.now()) {
+    if (isExpired(row.expiresAt, Date.now())) {
       // Lazy expire is a mutation concern; query can't write. Caller's adapter
       // treats expired rows as missing; cleanup cron removes them.
       return null;
@@ -34,7 +38,7 @@ export const set = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { keyPrefix, cacheKey, value, ttlMs }) => {
-    const expiresAt = ttlMs !== undefined ? Date.now() + ttlMs : undefined;
+    const expiresAt = expiresAtFromTtl(Date.now(), ttlMs);
     const existing = await ctx.db
       .query("kv")
       .withIndex("by_prefix_key", (q) =>
@@ -68,13 +72,9 @@ export const setIfNotExists = mutation({
       .unique();
 
     const now = Date.now();
-    const isLive =
-      existing !== null &&
-      (existing.expiresAt === undefined || existing.expiresAt > now);
+    if (existing !== null && !isExpired(existing.expiresAt, now)) return false;
 
-    if (isLive) return false;
-
-    const expiresAt = ttlMs !== undefined ? now + ttlMs : undefined;
+    const expiresAt = expiresAtFromTtl(now, ttlMs);
     if (existing) {
       await ctx.db.patch(existing._id, { value, expiresAt });
     } else {

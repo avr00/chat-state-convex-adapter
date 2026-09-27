@@ -1,5 +1,9 @@
+// Ordered, append-only lists backing the Chat SDK's appendToList/getList
+// (thread history cache for persistThreadHistory adapters, per-user transcripts).
+
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
+import { expiresAtFromTtl, isExpired } from "./expiry.js";
 
 export const appendToList = mutation({
   args: {
@@ -12,16 +16,27 @@ export const appendToList = mutation({
   returns: v.null(),
   handler: async (ctx, { keyPrefix, listKey, value, maxLength, ttlMs }) => {
     const now = Date.now();
-    const expiresAt = ttlMs !== undefined ? now + ttlMs : undefined;
+    const expiresAt = expiresAtFromTtl(now, ttlMs);
 
-    const highest = await ctx.db
+    const rows = await ctx.db
       .query("lists")
       .withIndex("by_prefix_key_seq", (q) =>
         q.eq("keyPrefix", keyPrefix).eq("listKey", listKey)
       )
-      .order("desc")
-      .first();
-    const seq = (highest?.seq ?? 0) + 1;
+      .order("asc")
+      .collect();
+    const seq = (rows.at(-1)?.seq ?? 0) + 1;
+
+    // Readers already treat expired entries as gone. Delete them here so the
+    // TTL refresh below can't bring them back before the cleanup cron runs.
+    const live: typeof rows = [];
+    for (const row of rows) {
+      if (isExpired(row.expiresAt, now)) {
+        await ctx.db.delete(row._id);
+      } else {
+        live.push(row);
+      }
+    }
 
     await ctx.db.insert("lists", {
       keyPrefix,
@@ -31,31 +46,23 @@ export const appendToList = mutation({
       expiresAt,
     });
 
-    // Trim overflow — keep newest `maxLength` entries
+    // Keep the newest `maxLength` entries, counting the one just inserted.
+    // `maxLength: 1` is how the SDK's transcript delete writes its tombstone.
+    let kept = live;
     if (maxLength !== undefined && maxLength > 0) {
-      const all = await ctx.db
-        .query("lists")
-        .withIndex("by_prefix_key_seq", (q) =>
-          q.eq("keyPrefix", keyPrefix).eq("listKey", listKey)
-        )
-        .order("asc")
-        .collect();
-      const excess = all.length - maxLength;
-      for (let i = 0; i < excess; i++) {
-        const row = all[i];
-        if (row) await ctx.db.delete(row._id);
+      const excess = live.length + 1 - maxLength;
+      if (excess > 0) {
+        for (const row of live.slice(0, excess)) {
+          await ctx.db.delete(row._id);
+        }
+        kept = live.slice(excess);
       }
     }
 
-    // Refresh TTL on all remaining entries for this key (matches state-pg)
+    // The TTL applies to the whole list, so refresh it on every remaining
+    // entry (same as Redis PEXPIRE on the list key and state-pg's UPDATE).
     if (expiresAt !== undefined) {
-      const remaining = await ctx.db
-        .query("lists")
-        .withIndex("by_prefix_key_seq", (q) =>
-          q.eq("keyPrefix", keyPrefix).eq("listKey", listKey)
-        )
-        .collect();
-      for (const row of remaining) {
+      for (const row of kept) {
         if (row.expiresAt !== expiresAt) {
           await ctx.db.patch(row._id, { expiresAt });
         }
@@ -80,8 +87,6 @@ export const getList = query({
       )
       .order("asc")
       .collect();
-    return rows
-      .filter((r) => r.expiresAt === undefined || r.expiresAt > now)
-      .map((r) => r.value);
+    return rows.filter((r) => !isExpired(r.expiresAt, now)).map((r) => r.value);
   },
 });

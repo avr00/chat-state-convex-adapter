@@ -90,4 +90,90 @@ describe("crons.cleanupExpired", () => {
     }));
     expect(counts).toEqual({ locks: 1, kv: 1, queues: 1 });
   });
+
+  test("rows without a TTL don't starve the sweep", async () => {
+    const t = convexTest(schema, modules);
+    // More permanent rows than one batch. A missing `expiresAt` sorts before
+    // every number, so an unbounded `lte(now)` range would return these first.
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 250; i++) {
+        await ctx.db.insert("kv", { keyPrefix: KP, cacheKey: `p${i}`, value: "1" });
+        await ctx.db.insert("lists", {
+          keyPrefix: KP,
+          listKey: "transcripts:user:u1",
+          seq: i + 1,
+          value: "1",
+        });
+      }
+    });
+    await t.mutation(api.kv.set, {
+      keyPrefix: KP,
+      cacheKey: "dedupe",
+      value: "true",
+      ttlMs: 10,
+    });
+    await t.mutation(api.lists.appendToList, {
+      keyPrefix: KP,
+      listKey: "msg-history:t1",
+      value: "m",
+      ttlMs: 10,
+    });
+    vi.advanceTimersByTime(100);
+
+    await t.mutation(internal.crons.cleanupExpired, {});
+
+    const left = await t.run(async (ctx) => ({
+      dedupe: await ctx.db
+        .query("kv")
+        .withIndex("by_prefix_key", (q) =>
+          q.eq("keyPrefix", KP).eq("cacheKey", "dedupe")
+        )
+        .unique(),
+      kv: (await ctx.db.query("kv").collect()).length,
+      lists: (await ctx.db.query("lists").collect()).length,
+    }));
+    expect(left).toEqual({ dedupe: null, kv: 250, lists: 250 });
+  });
+
+  test("drains a backlog larger than one batch by rescheduling itself", async () => {
+    const t = convexTest(schema, modules);
+    const expiresAt = Date.now() + 10;
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 450; i++) {
+        await ctx.db.insert("kv", {
+          keyPrefix: KP,
+          cacheKey: `dedupe:${i}`,
+          value: "true",
+          expiresAt,
+        });
+      }
+    });
+    vi.advanceTimersByTime(100);
+
+    await t.mutation(internal.crons.cleanupExpired, {});
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const left = await t.run(
+      async (ctx) => (await ctx.db.query("kv").collect()).length
+    );
+    expect(left).toBe(0);
+  });
+
+  test("does not reschedule when the backlog fits in one batch", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(api.kv.set, {
+      keyPrefix: KP,
+      cacheKey: "k",
+      value: "v",
+      ttlMs: 10,
+    });
+    vi.advanceTimersByTime(100);
+
+    await t.mutation(internal.crons.cleanupExpired, {});
+
+    const scheduled = await t.run(async (ctx) =>
+      ctx.db.system.query("_scheduled_functions").collect()
+    );
+    expect(scheduled).toEqual([]);
+  });
 });

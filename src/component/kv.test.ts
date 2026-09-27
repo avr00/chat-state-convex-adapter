@@ -59,6 +59,35 @@ describe("kv", () => {
     ).toBeNull();
   });
 
+  test("ttlMs 0 means no expiry, like the official adapters", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(api.kv.set, {
+      keyPrefix: KP,
+      cacheKey: "k",
+      value: "v",
+      ttlMs: 0,
+    });
+    vi.advanceTimersByTime(60_000);
+    expect(
+      await t.query(api.kv.get, { keyPrefix: KP, cacheKey: "k" })
+    ).toBe("v");
+  });
+
+  test("set without ttl clears a previous TTL", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(api.kv.set, {
+      keyPrefix: KP,
+      cacheKey: "k",
+      value: "v1",
+      ttlMs: 10,
+    });
+    await t.mutation(api.kv.set, { keyPrefix: KP, cacheKey: "k", value: "v2" });
+    vi.advanceTimersByTime(50);
+    expect(
+      await t.query(api.kv.get, { keyPrefix: KP, cacheKey: "k" })
+    ).toBe("v2");
+  });
+
   test("delete removes the key", async () => {
     const t = convexTest(schema, modules);
     await t.mutation(api.kv.set, {
@@ -122,6 +151,23 @@ describe("kv", () => {
       expect(
         await t.query(api.kv.get, { keyPrefix: KP, cacheKey: "k" })
       ).toBe("second");
+    });
+
+    test("a key stored with ttlMs 0 is permanent and never re-claimed", async () => {
+      const t = convexTest(schema, modules);
+      await t.mutation(api.kv.setIfNotExists, {
+        keyPrefix: KP,
+        cacheKey: "k",
+        value: "first",
+        ttlMs: 0,
+      });
+      vi.advanceTimersByTime(60_000);
+      const ok = await t.mutation(api.kv.setIfNotExists, {
+        keyPrefix: KP,
+        cacheKey: "k",
+        value: "second",
+      });
+      expect(ok).toBe(false);
     });
 
     test("respects TTL on newly-set value", async () => {

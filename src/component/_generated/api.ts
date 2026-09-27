@@ -9,6 +9,7 @@
  */
 
 import type * as crons from "../crons.js";
+import type * as expiry from "../expiry.js";
 import type * as kv from "../kv.js";
 import type * as lists from "../lists.js";
 import type * as locks from "../locks.js";
@@ -24,6 +25,7 @@ import { anyApi, componentsGeneric } from "convex/server";
 
 const fullApi: ApiFromModules<{
   crons: typeof crons;
+  expiry: typeof expiry;
   kv: typeof kv;
   lists: typeof lists;
   locks: typeof locks;

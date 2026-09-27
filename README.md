@@ -4,11 +4,15 @@ Convex state adapter for [chat-sdk](https://chat-sdk.dev), shipped as a [Convex 
 
 Stores subscriptions, distributed locks, dedupe (via `setIfNotExists`), lists, and queues in your Convex deployment — so Chat SDK's webhook handlers can run on any serverless platform and share state safely.
 
+It implements the full Chat SDK `StateAdapter` contract, so the SDK features built on it work unchanged: thread state, message dedupe, the `queue` / `debounce` / `burst` concurrency strategies (including lock heartbeats and channel-scoped locks), the thread history cache used by WhatsApp and Telegram, and per-user history (`bot.history.user`, formerly `bot.transcripts`).
+
+**Compatibility:** `chat` 4.26 or later (tested against 4.41) and `convex` 1.24.8 or later (tested against 1.46).
+
 ## Why Convex?
 
 - **Serializable mutations** replace the lock-acquisition gymnastics of `SET NX PX` / `INSERT ON CONFLICT`. Lock correctness comes for free.
 - **Component isolation**: chat state lives in its own tables, separate from your app's schema.
-- **Built-in cleanup cron** — expired rows are swept hourly without operator intervention.
+- **Built-in cleanup cron** — expired rows are swept hourly without operator intervention, and a large backlog keeps draining until it's gone.
 
 ## Install
 
@@ -56,7 +60,7 @@ export const slackWebhook = httpAction(async (ctx, request) => {
     ctx,
     component: components.chatState,
   });
-  await state.connect();
+  await state.connect(); // optional: Chat also connects on first use
 
   const bot = new Chat({
     userName: "mybot",
@@ -106,7 +110,7 @@ import { api } from "./convex/_generated/api";
 const client = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 const state = createConvexState({ client, api: api.chatState });
-await state.connect();
+await state.connect(); // optional: Chat also connects on first use
 
 const bot = new Chat({
   userName: "mybot",
@@ -135,6 +139,8 @@ const bot = new Chat({
 | `keyPrefix` | no | `"chat-sdk"` | See [Multi-tenant usage](#multi-tenant-usage) |
 | `logger` | no | `ConsoleLogger("info").child("convex-ctx")` | Any Chat SDK `Logger` |
 
+`Chat` calls `state.connect()` when it initializes, so you only need to call it yourself if you use the adapter directly before the bot handles its first webhook.
+
 ## Multi-tenant usage
 
 `keyPrefix` is a **load-bearing isolation primitive**, not a cosmetic namespace. Every row written by the adapter is scoped to it, so choosing the right value is how you run more than one bot on a single Convex deployment without them stepping on each other's subscriptions, locks, and queues.
@@ -158,12 +164,12 @@ Because `keyPrefix` gates every read and write, **misconfiguring it is silently 
 | Table | Purpose |
 |---|---|
 | `subscriptions` | Threads the bot is actively listening to |
-| `locks` | Token-gated per-thread mutual exclusion (`acquire`, `release`, `forceRelease`, `extend`) |
-| `kv` | TTL'd key-value for the Chat SDK's internal caches and dedupe (`setIfNotExists`) |
-| `lists` | Ordered append-only with `maxLength` trim and TTL refresh |
-| `queues` | Per-thread FIFO with `maxSize` bound and per-entry TTL |
+| `locks` | Token-gated mutual exclusion per thread, or per channel with `lockScope: "channel"` (`acquire`, `release`, `forceRelease`, `extend`). The SDK's heartbeat renews held locks with `extend`, which never revives a lock that lapsed and was taken by someone else. |
+| `kv` | TTL'd key-value for thread state, message dedupe (`setIfNotExists`), modal context, and platform adapter caches |
+| `lists` | Ordered append-only lists with `maxLength` trim and a TTL that covers the whole list and is refreshed on every append. Backs the thread history cache and `bot.history.user`. |
+| `queues` | Per-thread FIFO with `maxSize` bound and per-entry TTL, used by the `queue`, `debounce`, and `burst` strategies |
 
-An internal cron sweeps expired rows hourly.
+TTLs follow the official adapters: a missing, zero, or negative `ttlMs` means the row never expires. Reads treat expired rows as absent right away. An internal cron deletes them hourly, and a run that finds more than one batch schedules another run immediately, so a busy bot's dedupe keys can't pile up.
 
 ## Limitations
 
@@ -196,6 +202,8 @@ pnpm build:codegen   # regenerates _generated/ and builds dist/
 pnpm test            # runs vitest against the component + adapter
 pnpm typecheck
 ```
+
+`convex codegen` needs a deployment to talk to. If you don't have one configured, `CONVEX_AGENT_MODE=anonymous npx convex init` sets up a local deployment without an account (it writes `.env.local`, which is gitignored).
 
 The `example/` directory is the host app convex commands run against, following the [rate-limiter](https://github.com/get-convex/rate-limiter) convention.
 
